@@ -1,49 +1,46 @@
 package streams
 
 import (
-	"net/http"
-	"github.com/gorilla/mux"
-	"log"
+	"fmt"
 	"encoding/json"
-)
+	"net/http"
 
+	"github.com/gorilla/mux"
+)
 
 const (
 	acceptedHeaderType = "application/json"
 )
 
-//getMessageHandler handles GET request
-func GetMessageHandler(w http.ResponseWriter, r *http.Request) {
+//GetStreamHandler handles GET request
+func GetStreamHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	if v, ok := vars["message"]; ok {
-		if str, err := FindSaved(v); err == nil {
-			resp := responseData{
-				Message: str,
-			}
-			resBody, err := json.Marshal(resp)
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte("unable to process data"))
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(200)
-			w.Write(resBody)
-			return
-		}
+	if _, ok := vars["streamId"]; !ok {
+		writeError(w,"failed to find stream id", http.StatusBadRequest)
+		return
 	}
-	w.WriteHeader(404)
-	resp := responseData{
-		ErrMsg: "Message not found",
-	}
-	resBody, err := json.Marshal(resp)
+	record, err := ReadStream(vars["streamId"])
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("unable to process data"))
+		writeError(w,fmt.Sprintf("failed to find record: %s", err.Error()), http.StatusBadRequest)
+		return
+	}
+	if record == nil {
+		writeError(w,fmt.Sprintf("cannot find the record:%s", vars["streamId"]), http.StatusNotFound)
+		return
+	}
+	resBody, err := json.Marshal(record)
+	if err != nil {
+		fmt.Println(err)
+		writeError(w,"failed to process the result", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
+	w.WriteHeader(200)
 	w.Write(resBody)
 	return
+}
+
+func writeError(w http.ResponseWriter, msg string, code int) {
+	w.WriteHeader(code)
+	w.Write([]byte(msg))
 }
